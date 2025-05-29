@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
+import { Profile } from '@/types/profile'
 
 // Cost estimation constants
 const PERPLEXITY_COST_PER_TOKEN = 0.000001 // $1 per million tokens
@@ -28,7 +29,7 @@ function recordRequest(userId: string) {
   requestTimes.set(userId, userRequests)
 }
 
-function getResearchPrompt(profile: any): string {
+function getResearchPrompt(profile: Profile): string {
   
   return `Please conduct comprehensive research on the following professional:
 
@@ -45,7 +46,7 @@ Please provide:
 Format the response as a detailed research summary that can be used for personalized email outreach.`
 }
 
-async function conductPerplexityResearch(profile: any): Promise<string> {
+async function conductPerplexityResearch(profile: Profile): Promise<string> {
   const prompt = getResearchPrompt(profile)
   
   const response = await fetch('https://api.perplexity.ai/chat/completions', {
@@ -133,7 +134,7 @@ async function updateGoogleSheet(
   }
 
   // Find the row for this profile (assuming first column is ID)
-  const profileRowIndex = rows.findIndex((row: any[], index: number) => 
+  const profileRowIndex = rows.findIndex((row: string[], index: number) => 
     index > 0 && row[0] == profileId
   )
 

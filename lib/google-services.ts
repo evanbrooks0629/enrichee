@@ -1,12 +1,43 @@
 import { google } from "googleapis"
 import { getServerSession } from "next-auth"
 import { authOptions } from "./auth"
+import { sheets_v4, drive_v3, gmail_v1 } from "googleapis"
+
+// Type definitions
+interface SpreadsheetFile {
+  id: string
+  name: string
+  modified: string
+}
+
+interface SheetInfo {
+  id: number
+  name: string
+  index: number
+}
+
+interface Profile {
+  id?: string
+  [key: string]: string | undefined
+}
+
+interface DraftInfo {
+  id: string
+  subject: string
+  snippet: string
+  created: string
+}
+
+interface SendResult {
+  messageId?: string
+  success: boolean
+}
 
 export class GoogleSheetsService {
-  private sheets: any
-  private drive: any
-  private auth: any
-  private session: any
+  private sheets: sheets_v4.Sheets
+  private drive: drive_v3.Drive
+  private auth: InstanceType<typeof google.auth.OAuth2>
+  private session: unknown
 
   constructor(accessToken: string, refreshToken?: string) {
     this.auth = new google.auth.OAuth2(
@@ -15,7 +46,7 @@ export class GoogleSheetsService {
       process.env.NEXTAUTH_URL + '/api/auth/callback/google'
     )
     
-    const credentials: any = { 
+    const credentials: { access_token: string; refresh_token?: string } = { 
       access_token: accessToken
     }
     
@@ -59,7 +90,7 @@ export class GoogleSheetsService {
     }
   }
 
-  async listSpreadsheets() {
+  async listSpreadsheets(): Promise<SpreadsheetFile[]> {
     try {
       const response = await this.drive.files.list({
         q: "mimeType='application/vnd.google-apps.spreadsheet'",
@@ -67,13 +98,16 @@ export class GoogleSheetsService {
         fields: "files(id, name, modifiedTime)",
       })
 
-      return response.data.files?.map((file: any) => ({
-        id: file.id!,
-        name: file.name!,
-        modified: file.modifiedTime!,
-      })) || []
-    } catch (error: any) {
-      if (error.code === 401) {
+      return response.data.files?.map((file) => ({
+        id: file.id || '',
+        name: file.name || '',
+        modified: file.modifiedTime || '',
+      })).filter((file): file is SpreadsheetFile => 
+        file.id !== '' && file.name !== '' && file.modified !== ''
+      ) || []
+    } catch (error: unknown) {
+      const apiError = error as { code?: number }
+      if (apiError.code === 401) {
         console.log('Access token expired, attempting refresh...')
         await this.refreshTokenIfNeeded()
         
@@ -84,11 +118,13 @@ export class GoogleSheetsService {
           fields: "files(id, name, modifiedTime)",
         })
 
-        return response.data.files?.map((file: any) => ({
-          id: file.id!,
-          name: file.name!,
-          modified: file.modifiedTime!,
-        })) || []
+        return response.data.files?.map((file) => ({
+          id: file.id || '',
+          name: file.name || '',
+          modified: file.modifiedTime || '',
+        })).filter((file): file is SpreadsheetFile => 
+          file.id !== '' && file.name !== '' && file.modified !== ''
+        ) || []
       }
       
       console.error("Error listing spreadsheets:", error)
@@ -96,19 +132,22 @@ export class GoogleSheetsService {
     }
   }
 
-  async listSheetsInSpreadsheet(spreadsheetId: string) {
+  async listSheetsInSpreadsheet(spreadsheetId: string): Promise<SheetInfo[]> {
     try {
       const response = await this.sheets.spreadsheets.get({
         spreadsheetId,
       })
 
-      return response.data.sheets?.map((sheet: any) => ({
-        id: sheet.properties?.sheetId!,
-        name: sheet.properties?.title!,
-        index: sheet.properties?.index!,
-      })) || []
-    } catch (error: any) {
-      if (error.code === 401) {
+      return response.data.sheets?.map((sheet) => ({
+        id: sheet.properties?.sheetId || 0,
+        name: sheet.properties?.title || '',
+        index: sheet.properties?.index || 0,
+      })).filter((sheet): sheet is SheetInfo => 
+        sheet.name !== ''
+      ) || []
+    } catch (error: unknown) {
+      const apiError = error as { code?: number }
+      if (apiError.code === 401) {
         console.log('Access token expired, attempting refresh...')
         await this.refreshTokenIfNeeded()
         
@@ -117,11 +156,13 @@ export class GoogleSheetsService {
           spreadsheetId,
         })
 
-        return response.data.sheets?.map((sheet: any) => ({
-          id: sheet.properties?.sheetId!,
-          name: sheet.properties?.title!,
-          index: sheet.properties?.index!,
-        })) || []
+        return response.data.sheets?.map((sheet) => ({
+          id: sheet.properties?.sheetId || 0,
+          name: sheet.properties?.title || '',
+          index: sheet.properties?.index || 0,
+        })).filter((sheet): sheet is SheetInfo => 
+          sheet.name !== ''
+        ) || []
       }
       
       console.error("Error listing sheets:", error)
@@ -129,7 +170,7 @@ export class GoogleSheetsService {
     }
   }
 
-  async fetchProfiles(spreadsheetId: string, sheetName: string, limit?: number) {
+  async fetchProfiles(spreadsheetId: string, sheetName: string, limit?: number): Promise<Profile[]> {
     try {
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId,
@@ -141,8 +182,8 @@ export class GoogleSheetsService {
       if (rows.length === 0) return []
       console.log("Rows:", rows)
 
-      const headers = rows[0]
-      const dataRows = rows.slice(1)
+      const headers = rows[0] as string[]
+      const dataRows = rows.slice(1) as string[][]
 
       // Check if an ID column exists
       const hasIdColumn = headers.some((header: string) => 
@@ -157,7 +198,7 @@ export class GoogleSheetsService {
         const updatedHeaders = ['id', ...headers]
         
         // Add ID values to each data row
-        const updatedRows = dataRows.map((row: any[], index: number) => [
+        const updatedRows = dataRows.map((row: string[], index: number) => [
           `profile_${index + 1}`,
           ...row
         ])
@@ -178,8 +219,8 @@ export class GoogleSheetsService {
         console.log("ID column added to the sheet successfully")
         
         // Return profiles with the new structure
-        const profiles = updatedRows.map((row: any[]) => {
-          const profile: any = {}
+        const profiles = updatedRows.map((row: string[]) => {
+          const profile: Profile = {}
           updatedHeaders.forEach((header: string, index: number) => {
             profile[header] = row[index] || ""
           })
@@ -189,8 +230,8 @@ export class GoogleSheetsService {
         return limit ? profiles.slice(0, limit) : profiles
       }
 
-      const profiles = dataRows.map((row: any[], index: number) => {
-        const profile: any = {}
+      const profiles = dataRows.map((row: string[], index: number) => {
+        const profile: Profile = {}
         headers.forEach((header: string, index: number) => {
           profile[header] = row[index] || ""
         })
@@ -204,8 +245,9 @@ export class GoogleSheetsService {
       })
 
       return limit ? profiles.slice(0, limit) : profiles
-    } catch (error: any) {
-      if (error.code === 401) {
+    } catch (error: unknown) {
+      const apiError = error as { code?: number }
+      if (apiError.code === 401) {
         console.log('Access token expired, attempting refresh...')
         await this.refreshTokenIfNeeded()
         
@@ -218,8 +260,8 @@ export class GoogleSheetsService {
         const rows = response.data.values || []
         if (rows.length === 0) return []
 
-        const headers = rows[0]
-        const dataRows = rows.slice(1)
+        const headers = rows[0] as string[]
+        const dataRows = rows.slice(1) as string[][]
 
         // Check if an ID column exists
         const hasIdColumn = headers.some((header: string) => 
@@ -234,7 +276,7 @@ export class GoogleSheetsService {
           const updatedHeaders = ['id', ...headers]
           
           // Add ID values to each data row
-          const updatedRows = dataRows.map((row: any[], index: number) => [
+          const updatedRows = dataRows.map((row: string[], index: number) => [
             `profile_${index + 1}`,
             ...row
           ])
@@ -255,8 +297,8 @@ export class GoogleSheetsService {
           console.log("ID column added to the sheet successfully")
           
           // Return profiles with the new structure
-          const profiles = updatedRows.map((row: any[]) => {
-            const profile: any = {}
+          const profiles = updatedRows.map((row: string[]) => {
+            const profile: Profile = {}
             updatedHeaders.forEach((header: string, index: number) => {
               profile[header] = row[index] || ""
             })
@@ -266,8 +308,8 @@ export class GoogleSheetsService {
           return limit ? profiles.slice(0, limit) : profiles
         }
 
-        const profiles = dataRows.map((row: any[], index: number) => {
-          const profile: any = {}
+        const profiles = dataRows.map((row: string[], index: number) => {
+          const profile: Profile = {}
           headers.forEach((header: string, index: number) => {
             profile[header] = row[index] || ""
           })
@@ -287,7 +329,7 @@ export class GoogleSheetsService {
     }
   }
 
-  async batchUpdateCells(spreadsheetId: string, requests: any[]) {
+  async batchUpdateCells(spreadsheetId: string, requests: sheets_v4.Schema$Request[]): Promise<void> {
     try {
       await this.refreshTokenIfNeeded()
       
@@ -303,8 +345,8 @@ export class GoogleSheetsService {
 }
 
 export class GmailService {
-  private gmail: any
-  private auth: any
+  private gmail: gmail_v1.Gmail
+  private auth: InstanceType<typeof google.auth.OAuth2>
 
   constructor(accessToken: string, refreshToken?: string) {
     this.auth = new google.auth.OAuth2(
@@ -321,19 +363,19 @@ export class GmailService {
     this.gmail = google.gmail({ version: "v1", auth: this.auth })
   }
 
-  private async refreshTokenIfNeeded() {
+  private async refreshTokenIfNeeded(): Promise<string | null> {
     try {
       const tokenInfo = await this.auth.getAccessToken()
       if (!tokenInfo.token) {
         throw new Error('No valid access token')
       }
-    } catch (error) {
+    } catch {
       console.log('Gmail access token invalid, attempting refresh...')
       try {
         const { credentials } = await this.auth.refreshAccessToken()
         this.auth.setCredentials(credentials)
         console.log('Gmail token refreshed successfully')
-        return credentials.access_token
+        return credentials.access_token || null
       } catch (refreshError) {
         console.error('Failed to refresh Gmail token:', refreshError)
         throw new Error('Gmail authentication failed - please re-login')
@@ -342,7 +384,7 @@ export class GmailService {
     return null
   }
 
-  async createDraft(profile: any, emailContent: string, subjectPrefix: string = "") {
+  async createDraft(profile: Profile, emailContent: string, subjectPrefix: string = ""): Promise<string | undefined> {
     try {
       await this.refreshTokenIfNeeded()
       
@@ -352,7 +394,7 @@ export class GmailService {
       // Parse email content and normalize line breaks
       const normalizedContent = emailContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
       const lines = normalizedContent.trim().split('\n')
-      let subjectLine = null
+      let subjectLine: string | null = null
       let bodyLines: string[] = []
 
       for (let i = 0; i < Math.min(lines.length, 5); i++) {
@@ -458,14 +500,14 @@ export class GmailService {
         },
       })
 
-      return draft.data.id
+      return draft.data.id || undefined
     } catch (error) {
       console.error("Error creating Gmail draft:", error)
       throw error
     }
   }
 
-  async listRecentDrafts(maxResults: number = 10) {
+  async listRecentDrafts(maxResults: number = 10): Promise<DraftInfo[]> {
     try {
       await this.refreshTokenIfNeeded()
       
@@ -475,27 +517,29 @@ export class GmailService {
       })
 
       const drafts = response.data.drafts || []
-      const detailedDrafts = []
+      const detailedDrafts: DraftInfo[] = []
 
       for (const draft of drafts.slice(0, 5)) {
         try {
+          if (!draft.id) continue
+          
           const draftDetail = await this.gmail.users.drafts.get({
             userId: 'me',
             id: draft.id,
           })
 
           const message = draftDetail.data.message
-          const headers = message.payload?.headers || []
+          const headers = message?.payload?.headers || []
           
           let subject = "No Subject"
           for (const header of headers) {
             if (header.name === 'Subject') {
-              subject = header.value
+              subject = header.value || "No Subject"
               break
             }
           }
 
-          let snippet = message.snippet || ''
+          let snippet = message?.snippet || ''
           if (snippet.length > 100) {
             snippet = snippet.substring(0, 100) + "..."
           }
@@ -504,10 +548,10 @@ export class GmailService {
             id: draft.id,
             subject,
             snippet,
-            created: message.internalDate || '',
+            created: message?.internalDate || '',
           })
-        } catch (error) {
-          console.error("Error getting draft details:", error)
+        } catch (draftError) {
+          console.error("Error getting draft details:", draftError)
           continue
         }
       }
@@ -519,14 +563,14 @@ export class GmailService {
     }
   }
 
-  async updateAndSendDraft(draftId: string, updatedContent: string, recipientEmail: string) {
+  async updateAndSendDraft(draftId: string, updatedContent: string, recipientEmail: string): Promise<SendResult> {
     try {
       await this.refreshTokenIfNeeded()
 
       // Parse the updated content similar to createDraft
       const normalizedContent = updatedContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
       const lines = normalizedContent.trim().split('\n')
-      let subjectLine = null
+      let subjectLine: string | null = null
       let bodyLines: string[] = []
 
       for (let i = 0; i < Math.min(lines.length, 5); i++) {
@@ -628,7 +672,7 @@ export class GmailService {
       })
 
       return {
-        messageId: sentMessage.data.message?.id,
+        messageId: sentMessage.data.id || undefined,
         success: true
       }
 

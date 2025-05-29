@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { GoogleSheetsService } from "@/lib/google-services"
@@ -15,7 +15,7 @@ export async function GET(request: Request, { params }: { params: { spreadsheetI
     const { spreadsheetId, sheetName } = await params
     
     // Add your logic to fetch data from the specific sheet
-    const range = `${sheetName}!A1:Z`;
+    // const range = `${sheetName}!A1:Z`;
     const sheetData = await sheetsService.fetchProfiles(spreadsheetId, sheetName);
 
     return NextResponse.json({ profiles: sheetData })

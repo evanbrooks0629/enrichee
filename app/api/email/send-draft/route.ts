@@ -19,8 +19,7 @@ export async function POST(request: NextRequest) {
         error: 'No Gmail draft ID provided' 
       }, { status: 400 })
     }
-
-    let sentStatus = false
+    
     let errorMessage = ''
 
     try {
@@ -28,7 +27,6 @@ export async function POST(request: NextRequest) {
 
       // Update the draft with new content, then send it
       const result = await gmail.updateAndSendDraft(gmailDraftId, updatedContent, recipientEmail)
-      sentStatus = true
 
       // Add 'sent' column if it doesn't exist
       try {
@@ -79,7 +77,6 @@ export async function POST(request: NextRequest) {
 
     } catch (emailError) {
       console.error('Error sending email:', emailError)
-      sentStatus = false
       errorMessage = emailError instanceof Error ? emailError.message : 'Failed to send email'
 
       // Still try to update the sheet with FALSE status

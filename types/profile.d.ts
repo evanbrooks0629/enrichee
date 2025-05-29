@@ -1,6 +1,6 @@
 export interface Profile {
     email: string;
-    [key: string]: any;
+    [key: string]: string | undefined;
 }
 
 export interface ProfileWithDraftId extends Profile {

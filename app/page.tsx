@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react"
 import { useSession, signIn, signOut } from "next-auth/react"
-import { Profile, ProfileWithDraftId } from "@/types/profile"
+import { Profile } from "@/types/profile"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -32,24 +32,37 @@ import {
   Play,
   Pause,
   RefreshCcw,
+  AlertCircle,
 } from "lucide-react"
 
-const mockEmailDrafts = [
-  {
-    id: 1,
-    customerId: 1,
-    subject: "Partnership Opportunity with Tech Corp",
-    content:
-      "Hi John,\n\nI hope this email finds you well. I've been following Tech Corp's impressive growth in the technology sector, and I believe there's a great opportunity for collaboration.\n\nBest regards,\n[Your Name]",
-  },
-  {
-    id: 2,
-    customerId: 2,
-    subject: "SaaS Growth Strategy Discussion",
-    content:
-      "Hi Sarah,\n\nCongratulations on StartupCo's recent achievements! I'd love to discuss how we can help accelerate your SaaS growth strategy.\n\nBest regards,\n[Your Name]",
-  },
-]
+interface File {
+  id: string
+  name: string
+}
+
+interface Sheet {
+  id: string
+  name: string
+}
+
+interface ResearchResult {
+  success: boolean
+  profileId: string
+  name: string
+  research?: string
+  error?: string
+  cost?: number
+}
+
+interface EmailResult {
+  success: boolean
+  profileId: string
+  name: string
+  emailDraft?: string
+  gmailDraftId?: string
+  error?: string
+  cost?: number
+}
 
 export default function CustomerResearchApp() {
   const { data: session, status } = useSession()
@@ -80,12 +93,11 @@ Some things that we can do is automate some of their repetitive tasks.
   const [emailProgress, setEmailProgress] = useState(0)
   const [isResearchRunning, setIsResearchRunning] = useState(false)
   const [isEmailGenerating, setIsEmailGenerating] = useState(false)
-  const [currentEmailIndex, setCurrentEmailIndex] = useState(0)
-  const [researchResults, setResearchResults] = useState<any[]>([])
+  const [researchResults, setResearchResults] = useState<ResearchResult[]>([])
   const [researchError, setResearchError] = useState("")
   const [researchCost, setResearchCost] = useState(0)
   const [currentResearchProfile, setCurrentResearchProfile] = useState("")
-  const [emailResults, setEmailResults] = useState<any[]>([])
+  const [emailResults, setEmailResults] = useState<EmailResult[]>([])
   const [emailError, setEmailError] = useState("")
   const [emailCost, setEmailCost] = useState(0)
   const [currentEmailProfile, setCurrentEmailProfile] = useState("")
@@ -93,6 +105,28 @@ Some things that we can do is automate some of their repetitive tasks.
   const [currentDraftContent, setCurrentDraftContent] = useState("")
   const [profilesWithDrafts, setProfilesWithDrafts] = useState<Profile[]>([])
   const [isSendingEmail, setIsSendingEmail] = useState(false)
+  const [isUnauthorized, setIsUnauthorized] = useState(false)
+
+  useEffect(() => {
+    const savedSystemPrompt = localStorage.getItem('enrichee-system-prompt')
+    const savedEmailSignature = localStorage.getItem('enrichee-email-signature')
+    
+    if (savedSystemPrompt) {
+      setSystemPrompt(savedSystemPrompt)
+    }
+    
+    if (savedEmailSignature) {
+      setEmailSignature(savedEmailSignature)
+    }
+  }, [])
+
+  useEffect(() => {
+    localStorage.setItem('enrichee-system-prompt', systemPrompt)
+  }, [systemPrompt])
+
+  useEffect(() => {
+    localStorage.setItem('enrichee-email-signature', emailSignature)
+  }, [emailSignature])
 
   useEffect(() => {
     if (session) {
@@ -142,6 +176,15 @@ Some things that we can do is automate some of their repetitive tasks.
       setCurrentDraftContent(profilesWithDrafts[currentDraftIndex].drafts || "")
     }
   }, [currentDraftIndex, profilesWithDrafts])
+
+  useEffect(() => {
+    if (session?.user?.email && !session.user.email.endsWith('@developiq.ai')) {
+      setIsUnauthorized(true)
+      signOut({ redirect: false })
+    } else if (session?.user?.email?.endsWith('@developiq.ai')) {
+      setIsUnauthorized(false)
+    }
+  }, [session])
 
   const fetchSpreadsheets = async () => {
     setIsLoadingSpreadsheets(true)
@@ -329,7 +372,7 @@ Some things that we can do is automate some of their repetitive tasks.
         const profile = profilesToResearch[i]
         const rowIndex = customerData.findIndex(p => p.id === profile.id)
         
-        setCurrentResearchProfile(profile.name)
+        setCurrentResearchProfile(profile.name || '')
         setResearchProgress((i / profilesToResearch.length) * 100)
 
         try {
@@ -450,7 +493,7 @@ Some things that we can do is automate some of their repetitive tasks.
         const profile = profilesToEmail[i]
         const rowIndex = customerData.findIndex(p => p.id === profile.id)
         
-        setCurrentEmailProfile(profile.name)
+        setCurrentEmailProfile(profile.name || '')
         setEmailProgress((i / profilesToEmail.length) * 100)
 
         try {
@@ -667,6 +710,39 @@ Some things that we can do is automate some of their repetitive tasks.
     )
   }
 
+  if (isUnauthorized || (session?.user?.email && !session.user.email.endsWith('@developiq.ai'))) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <Card className="w-96 bg-gray-800 border-gray-600">
+          <CardHeader className="text-center">
+            <div className="flex justify-center mb-2">
+              <AlertCircle className="h-8 w-8 text-red-400" />
+            </div>
+            <CardTitle className="text-white">Access Denied</CardTitle>
+            <CardDescription className="text-gray-400">
+              You don&apos;t have permission to access this application
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="text-center space-y-4">
+            <p className="text-sm text-gray-400">
+              Only users with @developiq.ai email addresses are allowed to access Enrichee.
+            </p>
+            <p className="text-xs text-gray-500">
+              Current account: {session?.user?.email}
+            </p>
+            <Button 
+              onClick={() => signOut({ callbackUrl: '/' })}
+              variant="outline"
+              className="border-gray-600 bg-gray-900 text-gray-300 hover:bg-gray-700 hover:text-white"
+            >
+              Sign Out & Try Different Account
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   if (!session) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
@@ -800,7 +876,7 @@ Some things that we can do is automate some of their repetitive tasks.
                         <SelectValue placeholder="Choose a Google Sheet file" />
                       </SelectTrigger>
                       <SelectContent className="bg-gray-800 border-gray-600">
-                        {availableFiles.map((file: any) => (
+                        {availableFiles.map((file: File) => (
                           <SelectItem key={file.id} value={file.id} className="text-white">
                             {file.name}
                           </SelectItem>
@@ -815,7 +891,7 @@ Some things that we can do is automate some of their repetitive tasks.
                         <SelectValue placeholder="Choose a sheet" />
                       </SelectTrigger>
                       <SelectContent className="bg-gray-800 border-gray-600">
-                        {availableSheets.map((sheet: any) => (
+                        {availableSheets.map((sheet: Sheet) => (
                           <SelectItem key={sheet.id} value={sheet.name} className="text-white">
                             {sheet.name}
                           </SelectItem>
@@ -850,7 +926,7 @@ Some things that we can do is automate some of their repetitive tasks.
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {customerData.map((row: any) => (
+                        {customerData.map((row: Profile) => (
                           <TableRow key={row.id} className="border-gray-600">
                             {sheetHeaders.map((header: string, index: number) => (
                               <TableCell key={index} className="text-white">
@@ -1107,7 +1183,7 @@ Some things that we can do is automate some of their repetitive tasks.
                                 {profilesWithDrafts[currentDraftIndex].sent && (
                                   <Badge 
                                     variant={profilesWithDrafts[currentDraftIndex].sent === 'TRUE' ? 'default' : 'destructive'}
-                                    className="text-xs"
+                                    className="bg-gray-700 text-white border-gray-600"
                                   >
                                     {profilesWithDrafts[currentDraftIndex].sent === 'TRUE' ? 'Sent' : 'Failed'}
                                   </Badge>

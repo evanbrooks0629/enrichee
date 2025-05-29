@@ -26,6 +26,15 @@ export const authOptions: NextAuthOptions = {
     strategy: "jwt",
   },
   callbacks: {
+    async signIn({ user }) {
+      // Check if the user's email ends with @developiq.ai
+      if (user.email && user.email.endsWith('@developiq.ai')) {
+        return true
+      }
+      
+      // Reject sign-in for users not from developiq.ai
+      return false
+    },
     async jwt({ token, account }) {
       console.log("JWT callback - account:", !!account, "token keys:", Object.keys(token))
       if (account) {
