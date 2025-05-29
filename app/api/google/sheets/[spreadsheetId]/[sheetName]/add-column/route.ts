@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth"
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { spreadsheetId: string; sheetName: string } }
+  { params }: { params: Promise<{ spreadsheetId: string; sheetName: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions)
