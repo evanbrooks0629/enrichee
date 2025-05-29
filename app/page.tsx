@@ -750,7 +750,7 @@ Some things that we can do is automate some of their repetitive tasks.
           <CardHeader className="text-center">
             <CardTitle className="text-white">Enrichee</CardTitle>
             <CardDescription className="text-gray-400">
-              Sign in with Google to access your sheets and start researching
+              Sign in with DevelopIQ Google Account to access Enrichee
             </CardDescription>
           </CardHeader>
           <CardContent>
