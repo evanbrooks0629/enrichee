@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { GoogleSheetsService } from "@/lib/google-services"
 
-export async function GET(request: Request, { params }: { params: { spreadsheetId: string, sheetName: string } }) {
+export async function GET(request: Request, { params }: { params: Promise<{ spreadsheetId: string, sheetName: string }> }) {
   try {
     const session = await getServerSession(authOptions)
     
