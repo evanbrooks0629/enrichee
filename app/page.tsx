@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { VariableTextarea } from "@/components/ui/variable-textarea"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -89,6 +90,99 @@ Some things that we can do is automate some of their repetitive tasks.
   const [emailSignature, setEmailSignature] = useState("Evan Brooks\nSr. Engineer, DevelopIQ\nevan@developiq.ai\n561.789.8905\nwww.developiq.ai")
   const [isEditingPrompt, setIsEditingPrompt] = useState(false)
   const [isEditingSignature, setIsEditingSignature] = useState(false)
+  const [researchPrompt, setResearchPrompt] = useState(
+    `Conduct deep research on {{name}} from {{company}}. 
+    
+    Create a comprehensive professional research report on {{name}} and {{company}}.
+    
+    PART 1: INDIVIDUAL ANALYSIS
+    
+    Provide detailed information about {{name}} who works as {{role}} at {{company}}:
+    
+    1. Professional Background:
+       - Current responsibilities at their company
+       - Career trajectory and previous positions/companies
+       - Years of experience in this role and industry
+       - Key professional achievements and notable projects
+       - Areas of specialization or expertise
+    
+    2. Educational Background:
+       - Degrees, certifications, and institutions attended
+       - Specialized training relevant to their current role
+    
+    3. Industry Presence:
+       - Speaking engagements at conferences or industry events
+       - Published articles, whitepapers, or research papers
+       - Professional association memberships
+       - LinkedIn profile details and activity
+       - Other social media or professional online presence
+    
+    4. Professional Pain Points:
+       - Common challenges faced by professionals in their role
+       - Industry-specific issues that might affect their daily operations
+       - Regulatory or compliance concerns relevant to their position
+    
+    PART 2: COMPANY ANALYSIS
+    
+    Comprehensive information about their company:
+    
+    1. Company Overview:
+       - Industry classification and primary business focus
+       - Company size (employees, revenue if public)
+       - Year founded and brief history
+       - Market positioning and key competitors
+       - Parent company or subsidiaries, if applicable
+    
+    2. Recent Developments:
+       - Recent news or press releases (last 1-2 years)
+       - Recent product launches or service expansions
+       - Mergers, acquisitions, or partnerships
+       - Leadership changes or restructuring
+       - Financial performance indicators (if public)
+    
+    3. Corporate Technology Stack:
+       - Known technology systems or platforms used
+       - Recent technology investments or digital transformation initiatives
+       - Potential technology gaps or upgrade needs
+    
+    4. Business Challenges:
+       - Industry-specific challenges the company might be facing
+       - Market pressures or competitive threats
+       - Regulatory changes affecting their business model
+       - Growth opportunities they might be pursuing
+    
+    5. Company Culture:
+       - Mission and values statements
+       - Corporate social responsibility initiatives
+       - Work environment and company reviews
+    
+    PART 3: REGIONAL CONTEXT
+    
+    Information about the business environment in their location:
+    
+    1. Local Business Climate:
+       - Major industry trends in their location
+       - Local economic conditions
+       - Regional competitors or partners
+    
+    2. Regional Challenges:
+       - Location-specific business challenges
+       - Regulatory environment unique to this region
+    
+    PART 4: CONNECTION POINTS
+    
+    1. Potential Needs:
+       - Based on role, company, and industry, what services or products might be most valuable
+       - Specific pain points our solution could address
+       
+    2. Conversation Starters:
+       - Recent company news that could be referenced
+       - Industry trends relevant to both their business and our offering
+       - Common connections or networking opportunities
+    
+    Provide factual, well-researched information only. Clearly distinguish between verified facts and potential inferences. Include sources where available.`
+  )
+  const [isEditingResearchPrompt, setIsEditingResearchPrompt] = useState(false)
   const [researchProgress, setResearchProgress] = useState(0)
   const [emailProgress, setEmailProgress] = useState(0)
   const [isResearchRunning, setIsResearchRunning] = useState(false)
@@ -110,6 +204,7 @@ Some things that we can do is automate some of their repetitive tasks.
   useEffect(() => {
     const savedSystemPrompt = localStorage.getItem('enrichee-system-prompt')
     const savedEmailSignature = localStorage.getItem('enrichee-email-signature')
+    const savedResearchPrompt = localStorage.getItem('enrichee-research-prompt')
     
     if (savedSystemPrompt) {
       setSystemPrompt(savedSystemPrompt)
@@ -117,6 +212,10 @@ Some things that we can do is automate some of their repetitive tasks.
     
     if (savedEmailSignature) {
       setEmailSignature(savedEmailSignature)
+    }
+    
+    if (savedResearchPrompt) {
+      setResearchPrompt(savedResearchPrompt)
     }
   }, [])
 
@@ -127,6 +226,10 @@ Some things that we can do is automate some of their repetitive tasks.
   useEffect(() => {
     localStorage.setItem('enrichee-email-signature', emailSignature)
   }, [emailSignature])
+
+  useEffect(() => {
+    localStorage.setItem('enrichee-research-prompt', researchPrompt)
+  }, [researchPrompt])
 
   useEffect(() => {
     if (session) {
@@ -383,6 +486,7 @@ Some things that we can do is automate some of their repetitive tasks.
             },
             body: JSON.stringify({
               profile,
+              researchPrompt,
               spreadsheetId: selectedFile,
               sheetName: selectedSheet,
               rowIndex,
@@ -774,7 +878,43 @@ Some things that we can do is automate some of their repetitive tasks.
           <SidebarContent className="p-4 space-y-6 bg-gray-800 border-gray-600">
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label className="text-sm font-medium text-gray-300">System Prompt</label>
+                <label className="text-sm font-medium text-gray-300">Research Prompt</label>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsEditingResearchPrompt(!isEditingResearchPrompt)}
+                  className="text-gray-400 hover:text-gray-900"
+                >
+                  {isEditingResearchPrompt ? <Save className="h-4 w-4" /> : <Edit3 className="h-4 w-4" />}
+                </Button>
+              </div>
+              <div className="mb-2">
+                <p className="text-xs text-gray-400">
+                  Use variables like {`{{name}}`}, {`{{company}}`}, {`{{role}}`} from your sheet columns
+                </p>
+                {sheetHeaders.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {sheetHeaders.map((header) => (
+                      <Badge key={header} variant="outline" className="text-xs text-gray-400 border-gray-600">
+                        {`{{${header}}}`}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <VariableTextarea
+                value={researchPrompt}
+                onChange={(value) => setResearchPrompt(value)}
+                availableVariables={sheetHeaders}
+                disabled={!isEditingResearchPrompt}
+                className="bg-gray-800 border-gray-700 text-white min-h-[200px]"
+                placeholder="Enter your research prompt with variables like {{name}}, {{company}}..."
+              />
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium text-gray-300">Email System Prompt</label>
                 <Button
                   variant="ghost"
                   size="sm"

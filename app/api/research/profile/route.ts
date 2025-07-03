@@ -8,7 +8,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
 
-  const { profile, spreadsheetId, sheetName, rowIndex, columnIndex } = await request.json()
+  const { profile, researchPrompt, spreadsheetId, sheetName, rowIndex, columnIndex } = await request.json()
 
   try {
     // Skip if profile already has research
@@ -21,14 +21,22 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Perform research using Perplexity
-    const researchPrompt = `Conduct deep research on ${profile.name} from ${profile.company || 'their company'}. 
+    // Replace variables in the research prompt
+    const replaceVariables = (prompt: string, profile: Record<string, string | undefined>) => {
+      return prompt.replace(/\{\{([^}]+)\}\}/g, (match, variable) => {
+        const key = variable.trim()
+        return profile[key] || match // Keep the variable if not found in profile
+      })
+    }
+
+    // Use custom research prompt or fallback to default
+    const defaultPrompt = `Conduct deep research on {{name}} from {{company}}. 
     
-    Create a comprehensive professional research report on ${profile.name} and ${profile.company}.
+    Create a comprehensive professional research report on {{name}} and {{company}}.
     
     PART 1: INDIVIDUAL ANALYSIS
     
-    Provide detailed information about ${profile.name} who works as ${profile.role} at ${profile.company}:
+    Provide detailed information about {{name}} who works as {{role}} at {{company}}:
     
     1. Professional Background:
        - Current responsibilities at their company
@@ -111,8 +119,9 @@ export async function POST(request: NextRequest) {
        - Industry trends relevant to both their business and our offering
        - Common connections or networking opportunities
     
-    Provide factual, well-researched information only. Clearly distinguish between verified facts and potential inferences. Include sources where available.
-    `
+    Provide factual, well-researched information only. Clearly distinguish between verified facts and potential inferences. Include sources where available.`
+
+    const finalPrompt = replaceVariables(researchPrompt || defaultPrompt, profile)
 
     const perplexityResponse = await fetch('https://api.perplexity.ai/chat/completions', {
       method: 'POST',
@@ -129,7 +138,7 @@ export async function POST(request: NextRequest) {
           },
           {
             role: 'user',
-            content: researchPrompt
+            content: finalPrompt
           }
         ],
         max_tokens: 500,
