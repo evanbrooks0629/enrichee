@@ -10,6 +10,8 @@ export async function POST(request: NextRequest) {
 
   const { profile, researchPrompt, spreadsheetId, sheetName, rowIndex, columnIndex } = await request.json()
 
+  console.log('Profile object received:', JSON.stringify(profile, null, 2))
+
   try {
     // Skip if profile already has research
     if (profile.research && profile.research.trim() !== '') {
