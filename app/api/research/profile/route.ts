@@ -132,7 +132,7 @@ export async function POST(request: NextRequest) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'llama-3.1-sonar-small-128k-online',
+        model: 'sonar',
         messages: [
           {
             role: 'system',
@@ -143,7 +143,7 @@ export async function POST(request: NextRequest) {
             content: finalPrompt
           }
         ],
-        max_tokens: 500,
+        max_tokens: 20000,
         temperature: 0.2,
       }),
     })

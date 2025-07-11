@@ -200,6 +200,14 @@ Some things that we can do is automate some of their repetitive tasks.
   const [profilesWithDrafts, setProfilesWithDrafts] = useState<Profile[]>([])
   const [isSendingEmail, setIsSendingEmail] = useState(false)
   const [isUnauthorized, setIsUnauthorized] = useState(false)
+  const [emailModel, setEmailModel] = useState<string>('gpt-4o')
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('enrichee-email-model')
+      if (saved) setEmailModel(saved)
+    }
+  }, [])
 
   useEffect(() => {
     const savedSystemPrompt = localStorage.getItem('enrichee-system-prompt')
@@ -230,6 +238,10 @@ Some things that we can do is automate some of their repetitive tasks.
   useEffect(() => {
     localStorage.setItem('enrichee-research-prompt', researchPrompt)
   }, [researchPrompt])
+
+  useEffect(() => {
+    localStorage.setItem('enrichee-email-model', emailModel)
+  }, [emailModel])
 
   useEffect(() => {
     if (session) {
@@ -613,7 +625,8 @@ Some things that we can do is automate some of their repetitive tasks.
               spreadsheetId: selectedFile,
               sheetName: selectedSheet,
               rowIndex,
-              columnIndex: draftsColumnIndex
+              columnIndex: draftsColumnIndex,
+              model: emailModel
             }),
           })
 
@@ -952,6 +965,23 @@ Some things that we can do is automate some of their repetitive tasks.
                 className="bg-gray-800 border-gray-700 text-white min-h-[80px]"
                 placeholder="Enter your email signature..."
               />
+            </div>
+
+            <div className="mb-4">
+              <label className="text-sm font-medium text-gray-300 mb-2 block">Email Model</label>
+              <Select value={emailModel} onValueChange={setEmailModel}>
+                <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
+                  <SelectValue placeholder="Choose a model" />
+                </SelectTrigger>
+                <SelectContent className="bg-gray-800 border-gray-600">
+                  <SelectItem value="gpt-4o" className="text-white">GPT-4o (OpenAI)</SelectItem>
+                  <SelectItem value="gpt-3.5-turbo" className="text-white">GPT-3.5-turbo (OpenAI)</SelectItem>
+                  <SelectItem value="claude-sonnet-4-20250514" className="text-white">Claude Sonnet 4 (Anthropic)</SelectItem>
+                  <SelectItem value="claude-3-opus-20240229" className="text-white">Claude 3 Opus (Anthropic)</SelectItem>
+                  <SelectItem value="claude-3-sonnet-20240229" className="text-white">Claude 3 Sonnet (Anthropic)</SelectItem>
+                  <SelectItem value="claude-3-haiku-20240307" className="text-white">Claude 3 Haiku (Anthropic)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </SidebarContent>
         </Sidebar>

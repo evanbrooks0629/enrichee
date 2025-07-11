@@ -3,6 +3,9 @@ import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import { getGoogleServices } from '@/lib/google-services'
 import OpenAI from 'openai'
+import Anthropic from '@anthropic-ai/sdk'
+
+type AnthropicContentBlock = { type: string; text?: string }
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -16,7 +19,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
 
-    const { profile, systemPrompt, emailSignature, spreadsheetId, sheetName, rowIndex, columnIndex } = await request.json()
+    const { profile, systemPrompt, emailSignature, spreadsheetId, sheetName, rowIndex, columnIndex, model: modelRaw } = await request.json()
+    const model: string = modelRaw || 'gpt-4o'
 
     // Check if profile has research data
     if (!profile.research || profile.research.trim() === '') {
@@ -26,27 +30,37 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Create the complete system prompt with signature
-    const completeSystemPrompt = `${systemPrompt}\n\nLastly, make sure the signature is the following:\n\n${emailSignature}`
-
-    // Create user prompt with profile data
-    const userPrompt = `Generate a personalized email for this profile:\n\n${JSON.stringify(profile, null, 2)}`
-
-    // Call OpenAI API
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: completeSystemPrompt },
-        { role: "user", content: userPrompt }
-      ],
-      temperature: 0.7,
-      max_tokens: 500,
-    })
-
-    const emailDraft = completion.choices[0].message.content
-
-    if (!emailDraft) {
-      throw new Error('No email draft generated')
+    let emailDraft: string = ''
+    if (model.startsWith('claude-')) {
+      const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+      const completion = await anthropic.messages.create({
+        model,
+        max_tokens: 1024,
+        messages: [
+          { role: 'user', content: `${systemPrompt}\n\n${JSON.stringify(profile, null, 2)}\n\n${emailSignature}` }
+        ]
+      })
+      emailDraft = (completion.content as AnthropicContentBlock[])
+        .filter((block) => block.type === 'text')
+        .map((block) => block.text || '')
+        .join('') || ''
+    } else {
+      // Default to OpenAI
+      const completeSystemPrompt = `${systemPrompt}\n\nLastly, make sure the signature is the following:\n\n${emailSignature}`
+      const userPrompt = `Generate a personalized email for this profile:\n\n${JSON.stringify(profile, null, 2)}`
+      const completion = await openai.chat.completions.create({
+        model,
+        messages: [
+          { role: 'system', content: completeSystemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 500,
+      })
+      emailDraft = completion.choices[0]?.message?.content || ''
+      if (!emailDraft) {
+        throw new Error('No email draft generated')
+      }
     }
 
     // Clean up problematic Unicode characters immediately after OpenAI response
